@@ -965,7 +965,8 @@ def save(
     output_features: Optional[Mapping[str, seqio.Feature]],
     task_feature_lengths: Mapping[str, int],
     batch_size: Optional[int],
-    output_dir: str,
+    output_dir_cpu: Optional[str],
+    output_dir: str,  # Deprecated
     model_name: str,
     warmup_examples: Optional[WarmupExamples] = None,
     tokenized_inputs: bool = False,
@@ -992,7 +993,9 @@ def save(
     task_feature_lengths: Input and target lengths.
     batch_size: Batch size for model to process. If None, then batch
       polymorphism is invoked.
-    output_dir: Path in ${BASE}/${VERSION} format output the final TPU-converted
+    output_dir_cpu: Path to output the SavedModel for CPUs.
+    output_dir: Deprecated and only used if the output_dir_* above are unset.
+      Path in ${BASE}/${VERSION} format output the final TPU-converted
       saved model. The CPU saved model will be saved to ${BASE}_cpu/${VERSION},
       such that "_cpu" is appended to the base path but the numeric version is
       preserved.
@@ -1024,10 +1027,16 @@ def save(
       be different or empty for other models.
     signature_name: Optional name of the exported function.
   """
-  if not os.path.basename(output_dir).isdigit():
-    raise ValueError('output_dir must be in the form ${BASE}/${VERSION}, where '
-                     '${VERSION} is an integer. Got a non-numeric version %s' %
-                     os.path.basename(output_dir))
+  if output_dir_cpu is None:
+    if output_dir is None:
+      raise ValueError('output_dir_cpu is mandatory')
+    if not os.path.basename(output_dir).isdigit():
+      raise ValueError('output_dir must be in the form ${BASE}/${VERSION}, '
+                       'where  ${VERSION} is an integer. Got a non-numeric '
+                       f'version {os.path.basename(output_dir)}. But while '
+                       'you are here, please migrate to output_dir_cpu.')
+    head, tail = os.path.split(output_dir)
+    output_dir_cpu = os.path.join(head + '_cpu', tail)
 
   logging.info('jax.process_count: %s', jax.process_count())
   logging.info('jax.local_devices: %s', jax.local_devices())  # Seems necessary.
@@ -1134,8 +1143,6 @@ def save(
       signature_name: module.__call__.get_concrete_function(*input_signature)
   }
   logging.info('Saving the CPU model...')
-  head, tail = os.path.split(output_dir)
-  export_dir_cpu = os.path.join(head + '_cpu', tail)
   # TODO(b/196260374): Figure out how to set experimental_custom_gradients=True.
   options = tf.saved_model.SaveOptions(
       experimental_custom_gradients=False,
@@ -1144,11 +1151,10 @@ def save(
       })
   tf.saved_model.save(
       module,
-      export_dir_cpu,
+      output_dir_cpu,
       signatures=signatures,
       options=options,
   )
-
 
 
   if warmup_examples:
@@ -1162,7 +1168,7 @@ def save(
 
     write_warmup_example_fn(
         warmup_examples,
-        output_dir=export_dir_cpu,
+        output_dir=output_dir_cpu,
         model_name=model_name,
         batch_sizes=module.export_batch_sizes,
         signature_name=signature_name)

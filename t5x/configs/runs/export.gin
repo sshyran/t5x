@@ -29,7 +29,8 @@ from t5x import export_lib
 OUTPUT_FEATURES = %gin.REQUIRED
 TASK_FEATURE_LENGTHS = %gin.REQUIRED
 CHECKPOINT_PATH = %gin.REQUIRED
-MODEL_OUTPUT_DIR = %gin.REQUIRED
+MODEL_OUTPUT_DIR_CPU = None
+MODEL_OUTPUT_DIR = None  # Deprecated, use the above instead.
 MODEL_NAME = %gin.REQUIRED
 BATCH_SIZE = None
 BEAM_SIZE = 1
@@ -59,6 +60,7 @@ export_lib.save:
   partitioner = @partitioning.PjitPartitioner()
   output_features = %OUTPUT_FEATURES
   task_feature_lengths = %TASK_FEATURE_LENGTHS
+  output_dir_cpu = %MODEL_OUTPUT_DIR_CPU
   output_dir = %MODEL_OUTPUT_DIR
   model_name = %MODEL_NAME
   batch_size = %BATCH_SIZE
